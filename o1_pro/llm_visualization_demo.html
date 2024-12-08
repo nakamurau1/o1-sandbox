@@ -1,186 +1,232 @@
-<!-- LLMの仕組みの可視化 -->
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>LLM Visualization Demo</title>
+<title>LLM Visualization</title>
 <style>
   body {
     font-family: sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     margin: 20px;
+    background: #f8f8f8;
   }
-  #canvas {
-    border: 1px solid #ccc;
-    margin-top: 20px;
+
+  .container {
+    max-width: 700px;
+    margin: 0 auto;
   }
-  .controls {
+
+  input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    font-size: 16px;
+    box-sizing: border-box;
     margin-bottom: 10px;
+  }
+
+  button {
+    padding: 8px 16px;
+    margin-bottom: 20px;
+    cursor: pointer;
+  }
+
+  .canvas-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    background: #fff;
+    border: 1px solid #ccc;
+    overflow: hidden;
+    border-radius: 5px;
+  }
+
+  .token {
+    position: absolute;
+    padding: 4px 8px;
+    border-radius: 3px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 14px;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.5s ease-in-out;
+  }
+
+  .transformer {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    background: #3178c6;
+    border-radius: 5px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    text-align: center;
+    transition: all 0.5s ease-in-out;
+    opacity: 0;
+  }
+
+  .arrow {
+    position: absolute;
+    width: 60px;
+    height: 2px;
+    background: #333;
+    transition: all 0.5s ease;
+    transform-origin: left center;
+  }
+
+  .output-token {
+    position: absolute;
+    padding: 4px 8px;
+    border-radius: 3px;
+    background: #28a745;
+    color: #fff;
+    font-weight: bold;
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: all 0.5s ease-in-out;
   }
 </style>
 </head>
 <body>
-<h1>LLM Visualization (Simplified)</h1>
-<p>以下は、入力トークンが埋め込みを通り、注意機構を通過して出力へと集約される流れを簡略化した例です。</p>
-<div class="controls">
-  <label>入力テキスト: <input id="inputText" type="text" value="The cat sat on the mat" size="30"></label>
-  <button id="runBtn">実行</button>
+<div class="container">
+  <h1>How an LLM Processes Your Input (Conceptual Visualization)</h1>
+  <p>Enter a prompt, then click "Run Model" to see a simplified visualization of the process.</p>
+  <input type="text" id="promptInput" placeholder="Type a sentence here..." />
+  <button id="runBtn">Run Model</button>
+  <div class="canvas-container" id="canvas"></div>
+  <p style="font-size:14px;color:#555;">Note: This is a conceptual demonstration only.</p>
 </div>
-<canvas id="canvas" width="800" height="400"></canvas>
 
 <script>
-// このサンプルでは、トークン分割 → 埋め込み → 注意(Attention) → 出力ベクトル生成
-// の流れを簡略的に視覚化します。
-// 実際のLLMは何百もの層と複雑な計算を行いますが、ここでは概念的理解が目的です。
+  const runBtn = document.getElementById('runBtn');
+  const canvas = document.getElementById('canvas');
+  const transformerCount = 3;
 
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+  // Utility: create DOM element with given class and text
+  function createEl(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text) el.innerText = text;
+    canvas.appendChild(el);
+    return el;
+  }
 
-document.getElementById('runBtn').addEventListener('click', visualize);
+  runBtn.addEventListener('click', () => {
+    // Clear previous visualization
+    canvas.innerHTML = '';
 
-function visualize() {
-  const text = document.getElementById('inputText').value.trim();
-  const tokens = tokenize(text);
-  // 仮の埋め込み(ベクトル): 各トークンに対してランダムな位置に点を描画
-  const embeddings = embed(tokens);
-  // 簡易的なアテンション計算
-  const attention = computeAttention(embeddings);
-  // 最終的な出力(集約されたベクトル)
-  const outputVec = aggregate(embeddings, attention);
+    const prompt = document.getElementById('promptInput').value.trim() || 'Hello world';
+    const tokens = prompt.split(' ').map((t, i) => ({text: t, index: i}));
 
-  draw(tokens, embeddings, attention, outputVec);
-}
+    // Display tokens at the top
+    const tokenEls = tokens.map((t,i) => {
+      const tokenEl = createEl('div', 'token', t.text);
+      tokenEl.style.background = `hsl(${(i*50)%360},70%,50%)`;
+      tokenEl.style.left = (30 + i*60) + 'px';
+      tokenEl.style.top = '20px';
+      return tokenEl;
+    });
 
-function tokenize(text) {
-  // 単純に空白で区切るだけ
-  return text.split(/\s+/).filter(t => t.length > 0);
-}
+    // Add transformer layers in the middle
+    const transformers = [];
+    for(let i=0; i<transformerCount; i++) {
+      const tf = createEl('div', 'transformer', 'Layer ' + (i+1));
+      tf.style.left = (150 + i*120) + 'px';
+      tf.style.top = '150px';
+      transformers.push(tf);
+    }
 
-function embed(tokens) {
-  // トークン数に応じて等間隔で配置
-  const baseX = 100;
-  const baseY = 100;
-  const spacing = 60;
-  return tokens.map((t, i) => {
-    return {
-      token: t,
-      x: baseX + i * spacing,
-      y: baseY + Math.random() * 20 - 10 //少しばらつかせる
-    };
+    // Add arrows between tokens and first transformer
+    const arrows = [];
+    tokenEls.forEach((tEl,i) => {
+      const arr = createEl('div', 'arrow');
+      arr.style.left = (45 + i*60) + 'px';
+      arr.style.top = '80px';
+      arr.style.transform = 'rotate(90deg)';
+      arrows.push(arr);
+    });
+
+    // Add arrows between transformers
+    for(let i=0; i<transformers.length-1; i++) {
+      const arr = createEl('div', 'arrow');
+      arr.style.left = (190 + i*120) + 'px';
+      arr.style.top = '190px';
+      arr.style.width = '60px';
+      arrows.push(arr);
+    }
+
+    // Add output token area
+    const outputToken = createEl('div', 'output-token', 'Predicted');
+    outputToken.style.left = (150 + transformerCount*120) + 'px';
+    outputToken.style.top = '300px';
+
+    // Animate the sequence
+    // Step 1: Show tokens
+    setTimeout(() => {
+      tokenEls.forEach(tEl => {
+        tEl.style.opacity = '1';
+        tEl.style.transform = 'translateY(0)';
+      });
+    }, 500);
+
+    // Step 2: Move tokens down to first transformer
+    setTimeout(() => {
+      tokenEls.forEach((tEl,i) => {
+        tEl.style.top = '100px';
+      });
+    }, 1500);
+
+    // Step 3: Show first transformer and arrows
+    setTimeout(() => {
+      transformers[0].style.opacity = '1';
+      arrows.slice(0,tokens.length).forEach(arr => arr.style.opacity = '1');
+    }, 2000);
+
+    // Step 4: Move tokens into first transformer
+    setTimeout(() => {
+      tokenEls.forEach((tEl,i) => {
+        tEl.style.left = (170 + i*10) + 'px';
+        tEl.style.top = '170px';
+      });
+    }, 2500);
+
+    // Step 5: Pass through each transformer
+    for (let i=1; i<transformerCount; i++) {
+      setTimeout(() => {
+        transformers[i].style.opacity = '1';
+        // Arrows between transformers
+        arrows[tokens.length + (i-1)].style.opacity = '1';
+      }, 3000 + (i-1)*1000);
+
+      setTimeout(() => {
+        // Shift tokens slightly to the next transformer
+        tokenEls.forEach((tEl) => {
+          let leftVal = parseFloat(tEl.style.left);
+          tEl.style.left = (leftVal + 120) + 'px';
+        });
+      }, 3500 + (i-1)*1000);
+    }
+
+    // Step 6: Finally produce output token
+    setTimeout(() => {
+      // Tokens go down
+      tokenEls.forEach((tEl) => {
+        tEl.style.top = '240px';
+      });
+    }, 3000 + (transformerCount-1)*1000);
+
+    setTimeout(() => {
+      outputToken.style.opacity = '1';
+      outputToken.style.transform = 'translateY(0)';
+    }, 3500 + (transformerCount-1)*1000);
+
+    setTimeout(() => {
+      outputToken.innerText = "Output: " + tokens[tokens.length-1].text + "...";
+    }, 4000 + (transformerCount-1)*1000);
   });
-}
-
-function computeAttention(embeddings) {
-  // 非常にシンプル化した擬似アテンション: 各トークン同士の"関連度"をランダムに
-  const n = embeddings.length;
-  const attention = [];
-  for (let i = 0; i < n; i++) {
-    const row = [];
-    for (let j = 0; j < n; j++) {
-      // 対角成分は自分自身に対する注意を小さめに、その他はランダム
-      row.push(i===j ? 0.1 : Math.random());
-    }
-    // 通常はsoftmaxするが、ここでは正規化だけ
-    const sum = row.reduce((a,b)=>a+b,0);
-    for (let k=0; k<n; k++) {
-      row[k] = row[k]/sum;
-    }
-    attention.push(row);
-  }
-  return attention;
-}
-
-function aggregate(embeddings, attention) {
-  // attention行列を用いて埋め込みを集約
-  // output = sum_i (attention[i]*embed[i])
-  // ここでは2次元座標を加重平均
-  const n = embeddings.length;
-  let avgX = 0, avgY = 0;
-  // 簡易的に全トークンへの平均的なアテンションをとる
-  // 実際はクエリトークンごとに計算するが、ここではまとめて平均
-  const avgAttn = embeddings.map((_, i) => {
-    let sum = 0;
-    for (let j=0; j<n; j++){
-      sum += attention[j][i];
-    }
-    return sum/n;
-  });
-
-  // ここで加重平均をとる
-  let total = 0;
-  for (let i=0; i<n; i++){
-    avgX += embeddings[i].x * avgAttn[i];
-    avgY += embeddings[i].y * avgAttn[i];
-    total += avgAttn[i];
-  }
-  avgX /= total;
-  avgY /= total;
-
-  return { x: avgX, y: avgY };
-}
-
-function draw(tokens, embeddings, attention, outputVec) {
-  ctx.clearRect(0,0,canvas.width, canvas.height);
-  ctx.font = "16px sans-serif";
-
-  // トークン点描画
-  for (let i=0; i<embeddings.length; i++) {
-    ctx.beginPath();
-    ctx.arc(embeddings[i].x, embeddings[i].y, 10, 0, 2*Math.PI);
-    ctx.fillStyle = "#87CEFA"; // 青系
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#000";
-    ctx.fillText(tokens[i], embeddings[i].x - ctx.measureText(tokens[i]).width/2, embeddings[i].y - 15);
-  }
-
-  // Attentionライン描画
-  // 各トークン同士の結合をラインで結び、その太さや透明度で注目度を表す
-  for (let i=0; i<embeddings.length; i++) {
-    for (let j=0; j<embeddings.length; j++) {
-      const attn = attention[i][j];
-      if (attn > 0.05) {
-        ctx.beginPath();
-        ctx.moveTo(embeddings[i].x, embeddings[i].y);
-        ctx.lineTo(embeddings[j].x, embeddings[j].y);
-        ctx.strokeStyle = `rgba(255,0,0,${attn})`;
-        ctx.stroke();
-      }
-    }
-  }
-
-  // 出力ベクトル（集約結果）を別の場所に表示
-  const outX = 400;
-  const outY = 300;
-  ctx.beginPath();
-  ctx.arc(outputVec.x, outputVec.y + 100, 10, 0, 2*Math.PI);
-  ctx.fillStyle = "#32CD32"; // 緑系
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#000";
-  ctx.fillText("Output Vector", outputVec.x - 40, outputVec.y + 100 - 15);
-
-  // 矢印で入力埋め込み群から出力ベクトルへ
-  ctx.beginPath();
-  ctx.moveTo(outputVec.x, outputVec.y + 30);
-  ctx.lineTo(outputVec.x, outputVec.y + 90);
-  ctx.strokeStyle = "#000";
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(outputVec.x - 5, outputVec.y + 80);
-  ctx.lineTo(outputVec.x, outputVec.y + 90);
-  ctx.lineTo(outputVec.x + 5, outputVec.y + 80);
-  ctx.fillStyle = "#000";
-  ctx.fill();
-
-  ctx.fillStyle = "#000";
-  ctx.fillText("← トークン群 (埋め込み)", 50, 80);
-  ctx.fillText("Attention による関連度計算", 300, 200);
-  ctx.fillText("→ 集約された出力表現", 450, outputVec.y + 105);
-}
 </script>
 </body>
 </html>
