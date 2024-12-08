@@ -1,0 +1,186 @@
+<!-- LLMの仕組みの可視化 -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LLM Visualization Demo</title>
+<style>
+  body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px;
+  }
+  #canvas {
+    border: 1px solid #ccc;
+    margin-top: 20px;
+  }
+  .controls {
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+<h1>LLM Visualization (Simplified)</h1>
+<p>以下は、入力トークンが埋め込みを通り、注意機構を通過して出力へと集約される流れを簡略化した例です。</p>
+<div class="controls">
+  <label>入力テキスト: <input id="inputText" type="text" value="The cat sat on the mat" size="30"></label>
+  <button id="runBtn">実行</button>
+</div>
+<canvas id="canvas" width="800" height="400"></canvas>
+
+<script>
+// このサンプルでは、トークン分割 → 埋め込み → 注意(Attention) → 出力ベクトル生成
+// の流れを簡略的に視覚化します。
+// 実際のLLMは何百もの層と複雑な計算を行いますが、ここでは概念的理解が目的です。
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+document.getElementById('runBtn').addEventListener('click', visualize);
+
+function visualize() {
+  const text = document.getElementById('inputText').value.trim();
+  const tokens = tokenize(text);
+  // 仮の埋め込み(ベクトル): 各トークンに対してランダムな位置に点を描画
+  const embeddings = embed(tokens);
+  // 簡易的なアテンション計算
+  const attention = computeAttention(embeddings);
+  // 最終的な出力(集約されたベクトル)
+  const outputVec = aggregate(embeddings, attention);
+
+  draw(tokens, embeddings, attention, outputVec);
+}
+
+function tokenize(text) {
+  // 単純に空白で区切るだけ
+  return text.split(/\s+/).filter(t => t.length > 0);
+}
+
+function embed(tokens) {
+  // トークン数に応じて等間隔で配置
+  const baseX = 100;
+  const baseY = 100;
+  const spacing = 60;
+  return tokens.map((t, i) => {
+    return {
+      token: t,
+      x: baseX + i * spacing,
+      y: baseY + Math.random() * 20 - 10 //少しばらつかせる
+    };
+  });
+}
+
+function computeAttention(embeddings) {
+  // 非常にシンプル化した擬似アテンション: 各トークン同士の"関連度"をランダムに
+  const n = embeddings.length;
+  const attention = [];
+  for (let i = 0; i < n; i++) {
+    const row = [];
+    for (let j = 0; j < n; j++) {
+      // 対角成分は自分自身に対する注意を小さめに、その他はランダム
+      row.push(i===j ? 0.1 : Math.random());
+    }
+    // 通常はsoftmaxするが、ここでは正規化だけ
+    const sum = row.reduce((a,b)=>a+b,0);
+    for (let k=0; k<n; k++) {
+      row[k] = row[k]/sum;
+    }
+    attention.push(row);
+  }
+  return attention;
+}
+
+function aggregate(embeddings, attention) {
+  // attention行列を用いて埋め込みを集約
+  // output = sum_i (attention[i]*embed[i])
+  // ここでは2次元座標を加重平均
+  const n = embeddings.length;
+  let avgX = 0, avgY = 0;
+  // 簡易的に全トークンへの平均的なアテンションをとる
+  // 実際はクエリトークンごとに計算するが、ここではまとめて平均
+  const avgAttn = embeddings.map((_, i) => {
+    let sum = 0;
+    for (let j=0; j<n; j++){
+      sum += attention[j][i];
+    }
+    return sum/n;
+  });
+
+  // ここで加重平均をとる
+  let total = 0;
+  for (let i=0; i<n; i++){
+    avgX += embeddings[i].x * avgAttn[i];
+    avgY += embeddings[i].y * avgAttn[i];
+    total += avgAttn[i];
+  }
+  avgX /= total;
+  avgY /= total;
+
+  return { x: avgX, y: avgY };
+}
+
+function draw(tokens, embeddings, attention, outputVec) {
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+  ctx.font = "16px sans-serif";
+
+  // トークン点描画
+  for (let i=0; i<embeddings.length; i++) {
+    ctx.beginPath();
+    ctx.arc(embeddings[i].x, embeddings[i].y, 10, 0, 2*Math.PI);
+    ctx.fillStyle = "#87CEFA"; // 青系
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#000";
+    ctx.fillText(tokens[i], embeddings[i].x - ctx.measureText(tokens[i]).width/2, embeddings[i].y - 15);
+  }
+
+  // Attentionライン描画
+  // 各トークン同士の結合をラインで結び、その太さや透明度で注目度を表す
+  for (let i=0; i<embeddings.length; i++) {
+    for (let j=0; j<embeddings.length; j++) {
+      const attn = attention[i][j];
+      if (attn > 0.05) {
+        ctx.beginPath();
+        ctx.moveTo(embeddings[i].x, embeddings[i].y);
+        ctx.lineTo(embeddings[j].x, embeddings[j].y);
+        ctx.strokeStyle = `rgba(255,0,0,${attn})`;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 出力ベクトル（集約結果）を別の場所に表示
+  const outX = 400;
+  const outY = 300;
+  ctx.beginPath();
+  ctx.arc(outputVec.x, outputVec.y + 100, 10, 0, 2*Math.PI);
+  ctx.fillStyle = "#32CD32"; // 緑系
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#000";
+  ctx.fillText("Output Vector", outputVec.x - 40, outputVec.y + 100 - 15);
+
+  // 矢印で入力埋め込み群から出力ベクトルへ
+  ctx.beginPath();
+  ctx.moveTo(outputVec.x, outputVec.y + 30);
+  ctx.lineTo(outputVec.x, outputVec.y + 90);
+  ctx.strokeStyle = "#000";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(outputVec.x - 5, outputVec.y + 80);
+  ctx.lineTo(outputVec.x, outputVec.y + 90);
+  ctx.lineTo(outputVec.x + 5, outputVec.y + 80);
+  ctx.fillStyle = "#000";
+  ctx.fill();
+
+  ctx.fillStyle = "#000";
+  ctx.fillText("← トークン群 (埋め込み)", 50, 80);
+  ctx.fillText("Attention による関連度計算", 300, 200);
+  ctx.fillText("→ 集約された出力表現", 450, outputVec.y + 105);
+}
+</script>
+</body>
+</html>
